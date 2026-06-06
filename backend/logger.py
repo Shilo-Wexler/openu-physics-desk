@@ -11,8 +11,8 @@ import os
 from logging.handlers import TimedRotatingFileHandler
 
 
-os.makedirs("logs", exist_ok=True)
-
+LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
 
 def get_logger(name: str) -> logging.Logger:
     """

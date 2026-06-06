@@ -1,87 +1,23 @@
+"""
+Inquiries database module.
+
+Provides functions for creating and retrieving student inquiries.
+"""
+
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import mysql.connector
 from datetime import datetime
 
+from db.connection import get_connection
+from db.courses import VALID_CATEGORIES
 from logger import get_logger
-from dotenv import load_dotenv
 
-
-load_dotenv()
 
 logger = get_logger(__name__)
-
-VALID_CATEGORIES = {"books", "exams", "lecturers", "other"}
-
-
-def get_connection() -> mysql.connector.MySQLConnection:
-    """
-    Opens and returns a new MySQL database connection using environment variables.
-
-    Returns:
-        A MySQL connection object.
-
-    Raises:
-        ValueError: if required environment variables are missing.
-        mysql.connector.Error: if the connection fails.
-    """
-    db_host = os.getenv("DB_HOST", "127.0.0.1")
-    db_port = int(os.getenv("DB_PORT", "3306"))
-    db_user = os.getenv("DB_USER")
-    db_password = os.getenv("DB_PASSWORD")
-    db_name = os.getenv("DB_NAME")
-
-    if not db_user or not db_password or not db_name:
-        logger.critical(
-            "Server startup failed: Missing critical database "
-            "credentials (.env is missing or incomplete)."
-        )
-        raise ValueError("Database credentials are not fully configured.")
-
-    try:
-        connection = mysql.connector.connect(
-            host=db_host,
-            port=db_port,
-            database=db_name,
-            user=db_user,
-            password=db_password,
-            charset=os.getenv("DB_CHARSET", "utf8mb4")
-
-)
-        logger.debug("Database connection established successfully")
-        return connection
-    except mysql.connector.Error as e:
-        logger.error("Failed to connect to database: %s", e)
-        raise
-
-
-def get_all_courses() -> list[dict]:
-    """
-    Fetches all courses from the database.
-
-    Returns:
-        A list of dicts with keys: id, course_num, course_name.
-
-    Raises:
-        mysql.connector.Error: if the database query fails.
-    """
-    connection = None
-    cursor = None
-    try:
-        connection = get_connection()
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT id, course_num, course_name FROM courses")
-        courses = cursor.fetchall()
-        logger.debug("Fetched %s courses from database", len(courses))
-        return courses
-    except mysql.connector.Error as e:
-        logger.error("Failed to fetch courses: %s", e)
-        raise
-    finally:
-        if cursor:
-            cursor.close()
-        if connection:
-            connection.close()
 
 
 def create_inquiry(
@@ -114,7 +50,7 @@ def create_inquiry(
 
     if category not in VALID_CATEGORIES:
         logger.warning("create_inquiry called with invalid category: %s", category)
-        raise ValueError(f"Invalid category: {category}")
+        raise ValueError("Invalid category: %s" % category)
 
     connection = None
     cursor = None
@@ -164,8 +100,8 @@ def get_inquiries(
         mysql.connector.Error: if the database query fails.
     """
     now = datetime.now()
-    month = month or now.month
-    year = year or now.year
+    month = month if month is not None else now.month
+    year = year if year is not None else now.year
 
     if not (1 <= month <= 12):
         logger.warning("get_inquiries called with invalid month: %s", month)
@@ -177,8 +113,8 @@ def get_inquiries(
 
     if category and category not in VALID_CATEGORIES:
         logger.warning("get_inquiries called with invalid category: %s", category)
-        raise ValueError(f"Invalid category: {category}")
-    
+        raise ValueError("Invalid category: %s" % category)
+
     connection = None
     cursor = None
     try:
@@ -210,9 +146,7 @@ def get_inquiries(
 
         cursor.execute(query, params)
         inquiries = cursor.fetchall()
-        logger.debug(
-            "Fetched %s inquiries for %s/%s", len(inquiries), month, year
-        )
+        logger.debug("Fetched %s inquiries for %s/%s", len(inquiries), month, year)
         return inquiries
     except mysql.connector.Error as e:
         logger.error("Failed to fetch inquiries: %s", e)

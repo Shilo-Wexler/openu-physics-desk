@@ -2,18 +2,17 @@
 Tests for database.py — get_connection() function.
 """
 
-import os
 import logging
+import os
+import sys
 import unittest
 from unittest.mock import patch
 
 import mysql.connector
 
-import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from database import get_connection, get_all_courses, create_inquiry, get_inquiries
-
+from db import get_connection, get_all_courses, create_inquiry, get_inquiries
 
 class TestGetConnection(unittest.TestCase):
 
