@@ -48,3 +48,32 @@ def get_connection() -> mysql.connector.MySQLConnection:
     except mysql.connector.Error as e:
         logger.error(f"Failed to connect to database: {e}")
         raise
+
+
+def get_all_courses() -> list[dict]:
+    """
+    Fetches all courses from the database.
+
+    Returns:
+        A list of dicts with keys: id, course_num, course_name.
+
+    Raises:
+        mysql.connector.Error: if the database query fails.
+    """
+    connection = None
+    cursor = None
+    try:
+        connection = get_connection()
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT id, course_num, course_name FROM courses")
+        courses = cursor.fetchall()
+        logger.debug(f"Fetched {len(courses)} courses from database")
+        return courses
+    except mysql.connector.Error as e:
+        logger.error(f"Failed to fetch courses: {e}")
+        raise
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
