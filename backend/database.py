@@ -10,6 +10,8 @@ load_dotenv()
 
 logger = get_logger(__name__)
 
+VALID_CATEGORIES = {"books", "exams", "lecturers", "other"}
+
 
 def get_connection() -> mysql.connector.MySQLConnection:
     """
@@ -46,7 +48,7 @@ def get_connection() -> mysql.connector.MySQLConnection:
         logger.debug("Database connection established successfully")
         return connection
     except mysql.connector.Error as e:
-        logger.error(f"Failed to connect to database: {e}")
+        logger.error("Failed to connect to database: %s", e)
         raise
 
 
@@ -67,10 +69,68 @@ def get_all_courses() -> list[dict]:
         cursor = connection.cursor(dictionary=True)
         cursor.execute("SELECT id, course_num, course_name FROM courses")
         courses = cursor.fetchall()
-        logger.debug(f"Fetched {len(courses)} courses from database")
+        logger.debug("Fetched %s courses from database", len(courses))
         return courses
     except mysql.connector.Error as e:
-        logger.error(f"Failed to fetch courses: {e}")
+        logger.error("Failed to fetch courses: %s", e)
+        raise
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+def create_inquiry(
+    category: str,
+    message: str,
+    course_id: int | None = None,
+    email: str | None = None,
+    phone: str | None = None
+) -> int:
+    """
+    Inserts a new student inquiry into the database.
+
+    Args:
+        category: one of 'books', 'exams', 'lecturers', 'other'.
+        message: the student's message content.
+        course_id: optional reference to a course id.
+        email: optional contact email.
+        phone: optional contact phone number.
+
+    Returns:
+        The id of the newly created inquiry record.
+
+    Raises:
+        ValueError: if category/message are missing/empty, or if category is invalid.
+        mysql.connector.Error: if the database query fails.
+    """
+    if not category or not category.strip() or not message or not message.strip():
+        logger.warning("create_inquiry called with missing or whitespace-only required fields")
+        raise ValueError("category and message are required fields.")
+
+    if category not in VALID_CATEGORIES:
+        logger.warning("create_inquiry called with invalid category: %s", category)
+        raise ValueError(f"Invalid category: {category}")
+
+    connection = None
+    cursor = None
+    try:
+        connection = get_connection()
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            INSERT INTO contacts (category, message, course_id, email, phone)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (category, message, course_id, email, phone)
+        )
+        connection.commit()
+        new_id = cursor.lastrowid
+        logger.debug("New inquiry created with id: %s", new_id)
+        return new_id
+    except mysql.connector.Error as e:
+        logger.error("Failed to insert inquiry: %s", e)
         raise
     finally:
         if cursor:
