@@ -1,9 +1,10 @@
 import os
 
 import mysql.connector
-from dotenv import load_dotenv
+from datetime import datetime
 
 from logger import get_logger
+from dotenv import load_dotenv
 
 
 load_dotenv()
@@ -43,8 +44,10 @@ def get_connection() -> mysql.connector.MySQLConnection:
             port=db_port,
             database=db_name,
             user=db_user,
-            password=db_password
-        )
+            password=db_password,
+            charset=os.getenv("DB_CHARSET", "utf8mb4")
+
+)
         logger.debug("Database connection established successfully")
         return connection
     except mysql.connector.Error as e:
@@ -131,6 +134,88 @@ def create_inquiry(
         return new_id
     except mysql.connector.Error as e:
         logger.error("Failed to insert inquiry: %s", e)
+        raise
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+def get_inquiries(
+    month: int | None = None,
+    year: int | None = None,
+    category: str | None = None
+) -> list[dict]:
+    """
+    Fetches inquiries from the database with optional filters.
+    Defaults to current month and year if not specified.
+
+    Args:
+        month: month number (1-12). Defaults to current month.
+        year: full year (e.g. 2026). Defaults to current year.
+        category: one of 'books', 'exams', 'lecturers', 'other'. Optional.
+
+    Returns:
+        A list of dicts with inquiry data including course name.
+
+    Raises:
+        ValueError: if category is invalid or month/year are out of range.
+        mysql.connector.Error: if the database query fails.
+    """
+    now = datetime.now()
+    month = month or now.month
+    year = year or now.year
+
+    if not (1 <= month <= 12):
+        logger.warning("get_inquiries called with invalid month: %s", month)
+        raise ValueError("month must be between 1 and 12.")
+
+    if year < 2000 or year > 2100:
+        logger.warning("get_inquiries called with invalid year: %s", year)
+        raise ValueError("year is out of valid range.")
+
+    if category and category not in VALID_CATEGORIES:
+        logger.warning("get_inquiries called with invalid category: %s", category)
+        raise ValueError(f"Invalid category: {category}")
+    
+    connection = None
+    cursor = None
+    try:
+        connection = get_connection()
+        cursor = connection.cursor(dictionary=True)
+
+        query = """
+            SELECT
+                c.id,
+                c.category,
+                c.message,
+                c.email,
+                c.phone,
+                c.created_at,
+                co.course_num,
+                co.course_name
+            FROM contacts c
+            LEFT JOIN courses co ON c.course_id = co.id
+            WHERE MONTH(c.created_at) = %s
+            AND YEAR(c.created_at) = %s
+        """
+        params = [month, year]
+
+        if category:
+            query += " AND c.category = %s"
+            params.append(category)
+
+        query += " ORDER BY c.created_at DESC"
+
+        cursor.execute(query, params)
+        inquiries = cursor.fetchall()
+        logger.debug(
+            "Fetched %s inquiries for %s/%s", len(inquiries), month, year
+        )
+        return inquiries
+    except mysql.connector.Error as e:
+        logger.error("Failed to fetch inquiries: %s", e)
         raise
     finally:
         if cursor:
