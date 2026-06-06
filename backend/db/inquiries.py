@@ -41,7 +41,7 @@ def create_inquiry(
         The id of the newly created inquiry record.
 
     Raises:
-        ValueError: if category/message are missing/empty, or if category is invalid.
+        ValueError: if fields are empty, exceed length limits, or category is invalid.
         mysql.connector.Error: if the database query fails.
     """
     if not category or not category.strip() or not message or not message.strip():
@@ -51,6 +51,10 @@ def create_inquiry(
     if category not in VALID_CATEGORIES:
         logger.warning("create_inquiry called with invalid category: %s", category)
         raise ValueError("Invalid category: %s" % category)
+    
+    if len(message.strip()) > 1500:
+        logger.warning("create_inquiry called with message exceeding limit")
+        raise ValueError("message exceeds maximum length of 2000 characters.")
 
     connection = None
     cursor = None

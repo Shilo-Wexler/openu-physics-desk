@@ -12,8 +12,7 @@ import mysql.connector
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from db import get_connection, get_all_courses, create_inquiry, get_inquiries
-
+from db import get_connection, get_all_courses, create_inquiry, get_inquiries, create_announcement, get_announcements
 class TestGetConnection(unittest.TestCase):
 
     def setUp(self):
@@ -262,6 +261,78 @@ class TestGetInquiries(unittest.TestCase):
         with patch.dict(os.environ, {"DB_NAME": "nonexistent_db"}):
             with self.assertRaises(mysql.connector.Error):
                 get_inquiries()
+
+
+class TestCreateAnnouncement(unittest.TestCase):
+
+    def setUp(self):
+        logging.disable(logging.CRITICAL)
+        self.created_ids = []
+
+    def tearDown(self):
+        logging.disable(logging.NOTSET)
+        if self.created_ids:
+            connection = None
+            cursor = None
+            try:
+                connection = get_connection()
+                cursor = connection.cursor()
+                for record_id in self.created_ids:
+                    cursor.execute(
+                        "DELETE FROM announcements WHERE id = %s", (record_id,)
+                    )
+                connection.commit()
+            finally:
+                if cursor:
+                    cursor.close()
+                if connection:
+                    connection.close()
+
+    def test_successful_creation(self):
+        """Test that a valid announcement returns a positive integer id."""
+        new_id = create_announcement(
+            title="Test Title",
+            content="Test content for announcement."
+        )
+        self.created_ids.append(new_id)
+        self.assertIsInstance(new_id, int)
+        self.assertGreater(new_id, 0)
+
+    def test_empty_title_raises_value_error(self):
+        """Test that empty title raises ValueError."""
+        with self.assertRaises(ValueError):
+            create_announcement(title="", content="Some content.")
+
+    def test_whitespace_title_raises_value_error(self):
+        """Test that whitespace-only title raises ValueError."""
+        with self.assertRaises(ValueError):
+            create_announcement(title="   ", content="Some content.")
+
+    def test_empty_content_raises_value_error(self):
+        """Test that empty content raises ValueError."""
+        with self.assertRaises(ValueError):
+            create_announcement(title="Test Title", content="")
+
+    def test_whitespace_content_raises_value_error(self):
+        """Test that whitespace-only content raises ValueError."""
+        with self.assertRaises(ValueError):
+            create_announcement(title="Test Title", content="   ")
+
+    def test_title_too_long_raises_value_error(self):
+        """Test that title exceeding 100 characters raises ValueError."""
+        with self.assertRaises(ValueError):
+            create_announcement(title="א" * 101, content="Some content.")
+
+    def test_content_too_long_raises_value_error(self):
+        """Test that content exceeding 2250 characters raises ValueError."""
+        with self.assertRaises(ValueError):
+            create_announcement(title="Test Title", content="א" * 2251)
+
+    def test_raises_on_db_failure(self):
+        """Test that mysql.connector.Error is raised on database failure."""
+        with patch.dict(os.environ, {"DB_NAME": "nonexistent_db"}):
+            with self.assertRaises(mysql.connector.Error):
+                create_announcement(title="Test", content="Test content.")
 
 if __name__ == "__main__":
     unittest.main()
